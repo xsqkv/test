@@ -1,11 +1,9 @@
 #include <iostream>
 #include <sys/ioctl.h>
-#include <stdio.h>
 #include <unistd.h>
 #include <string>
 #include <termios.h>
 #include <signal.h>
-#include <stdlib.h>
 #include <fstream>
 #include <vector>
 #include <cmath>
@@ -15,7 +13,7 @@ using namespace std;
 struct Task
 {
 	public:
-	Task(string Question,vector<string> Answers,int RightAnswer)
+	Task(string Question="",vector<string> Answers={},int RightAnswer=0)
 	{
 		question=Question;
 		answers=Answers;
@@ -30,23 +28,21 @@ struct Task
 	int rightAnswer;
 };
 
-void setcur(int x,int y)
-{
-	printf("\033[%d;%dH",y+1,x+1);
-}
+struct termios old_tio, new_tio;//GLOBAL SETTINGS VARIABLES
+int w,h;
 
-void write(int x,int y,string text,bool selected=false)
+void setcur(int x,int y) {printf("\033[%d;%dH",y+1,x+1);}
+
+void write(string text,int y,bool selected=false)
 {
 	if(selected)
 	{
 		printf("%s","\033[7m");
 	}
-	printf("\033[%d;%dH",y+1,x+1);;//TITLE
+	printf("\033[%d;%dH",y+1,(w/2-(text.size()/2))+1);
 	printf("%s",text.c_str());
 	printf("%s","\033[0m");
 }
-
-struct termios old_tio, new_tio;//GLOBAL SETTINGS VARIABLES
 
 void clear() {system("clear");}//CLEAR SCREEN
 
@@ -64,8 +60,7 @@ bool isAnswer(string text)
 
 int main(int argc,char** argv)
 {
-	int right = 0;
-	int wrong = 0;
+	double right = 0;
 
 	struct sigaction sigIntHandler;         //
 	sigIntHandler.sa_handler = exit;		//
@@ -76,21 +71,22 @@ int main(int argc,char** argv)
 	struct winsize buff;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &buff);//PUT SIZE INTO VARIABLE
 
-	int w = buff.ws_col;//CONSOLE BUFFER WIDTH
-	int h = buff.ws_row;//CONSOLE BUFFER HEIGHT
+	w = buff.ws_col;//CONSOLE BUFFER WIDTH
+	h = buff.ws_row;//CONSOLE BUFFER HEIGHT
 
 	char ch = 0;//CHAR FOR CATCHING ENTER
-	unsigned int idx = pow(2,16)+1;//INDEX OF BUTTON
+	long long idx = pow(2,16)+1;//INDEX OF BUTTON
 
-	string title = "Welcome to this test on the topic of the operator of electronic computers!";
-	string start = "START TEST";
-	string exit = "EXIT";
+	const string title = "Welcome to this test on the topic of the operator of electronic computers!";
+	const string start = "START TEST";
+	const string exit = "EXIT";
 
 	clear();//CLEAR SCREEN
 
-	write(w/2-(title.size()/2),0,title);//START BUTTON
-	write(w/2-(start.size()/2),(h/2)-1,start,true);//START BUTTON
-	write(w/2-(exit.size()/2),(h/2)+1,exit);//EXIT BUTTON
+	write(title,0);//TITLE
+	
+	write(start,h/2-1,true);//START BUTTON
+	write(exit,h/2+1);//EXIT BUTTON
 
 	tcgetattr(STDIN_FILENO,&old_tio);//Get settings in variable
 	new_tio=old_tio;//Copy old settings to new
@@ -119,99 +115,93 @@ int main(int argc,char** argv)
 			switch(getchar())
 			{
 				case 'A'://ARROW UP
-					idx++;
+					idx--;
 					break;
 				case 'B'://ARROW DOWN
-					idx--;
+					idx++;
 					break;
 			}
 		}
 		if(idx % 2 == 1)//START BUTTON
 		{
-			write(w/2-(start.size()/2),(h/2)-1,start,true);
-			write(w/2-(exit.size()/2),(h/2)+1,exit,false);
+			write(start,h/2-1,true);
+			write(exit,h/2+1);
 		}
 		else//EXIT BUTTON
 		{
-			write(w/2-(start.size()/2),(h/2)-1,start,false);
-			write(w/2-(exit.size()/2),(h/2)+1,exit,true);
+			write(start,h/2-1);
+			write(exit,h/2+1,true);
 		}
 	}
 	
-	ifstream in("data");
+	ifstream in;
+	in.open("data");
 	string line;
-	int tasks = 0;
-	while(getline(in,line))//COUNT LINES
-	{
-		if(line.size() == 0)
-		{
-			++tasks;
-		}
-	}
-	++tasks;
-	cout << tasks << endl;
-	pause();
-	Task task[tasks];
-	
+	vector<Task> tasks;
+	idx=0;
     if (in.is_open())//FILL TASKS
     {
-		int idx=0;
 		int count = 0;
         while (getline(in, line))
         {
-			if(count==0)
-			{
-				task[idx].question=line;
-			}
-            if(isAnswer(line))
-			{
-				task[idx].rightAnswer = count-1;
-			}
-			else
-			{
-				task[idx].answers[count-1] = line;
-			}
-			if(line == "\n")
+			if(line.size() == 0)
 			{
 				count=0;
 				idx++;
+				continue;
+			}
+			if(count==0)
+			{
+				tasks.push_back(Task(line,{},0));
+				count++;
+				continue;
+			}
+            if(isAnswer(line))
+			{
+				tasks[idx].rightAnswer = count-1;//Add index of right number
+				int len = line.size();
+				tasks[idx].answers.push_back(line.substr(0,len-1));//Add answer
+			}	
+			else
+			{
+				tasks[idx].answers.push_back(line);//Add answer
 			}
 			count++;
         }
     }
-    in.close();     // закрываем файл
-
-	for(int i=0;i<tasks;i++)
+    in.close();//Close File
+	idx = pow(2,16);
+	for(int i = 0;i < tasks.size();i++)
 	{
 		clear();//CLS
-		int l = task[i].answers.size();
-		write(w/2-(task[i].question.size()/2),h/3,task[i].question);//WRITE QUESTION
-		for(int j = 0;j<task[i].answers.size();j++)
+		int l = tasks[i].answers.size();
+		write(tasks[i].question,h/3);//WRITE QUESTION
+		for(int j = 0;j<tasks[i].answers.size();j++)
 		{
-			write(w/2-(task[i].answers[j].size()/2),(h/2)+i+1,task[i].answers[j]);//WRITE ANSWERS
+			int l = tasks[i].answers.size();
+			if(idx % 4 == j)
+			{
+				write(tasks[i].answers[j],h/2+j+1,true);
+			}
+			else
+			{
+				write(tasks[i].answers[j],h/2+j+1,false);
+			}
 		}
-		idx = pow(2,16)+3;
 		for(;;)
 		{
 			ch = getchar();//CATCH SELECT
 			if(ch == 10)//IF ENTER PRESSED
 			{
-				if(idx % 4 == 3)
+				for(int j = 0;j<tasks[i].answers.size();j++)
 				{
-					break;
+					if(idx % 4 == tasks[i].rightAnswer)
+					{
+						right++;
+						break;
+					}
 				}
-				else if(idx % 4 == 2)
-				{
-					return 0;
-				}
-				else if(idx % 4 == 1)
-				{
-					return 0;
-				}
-				else if(idx % 4 == 0)
-				{
-					return 0;
-				}
+				break;
 			}
 			if (ch == '\033')//CATCH ARROW
 			{
@@ -219,38 +209,33 @@ int main(int argc,char** argv)
 				switch(getchar())
 				{
 					case 'A'://ARROW UP
-						idx++;
+						idx--;
 						break;
 					case 'B'://ARROW DOWN
-						idx--;
+						idx++;
 						break;
 				}
 			}
-			for(int j = 0;j<task[i].answers.size();j++)
+			for(int j = 0;j<tasks[i].answers.size();j++)
 			{
-				if(idx % 4 == 3)//1 BUTTON
+				int l = tasks[i].answers.size();
+				if(idx % 4 == j)//1 BUTTON
 				{
-					write(w/2-(task[i].answers[j].size()/2),(h/2)-1,task[i].answers[j],true);
-					write(w/2-(exit.size()/2),(h/2)+1,exit,false);
+					write(tasks[i].answers[j],h/2+j+1,true);
 				}
-				else if(idx % 4 == 2)//2 BUTTON
+				else
 				{
-					write(w/2-(start.size()/2),(h/2)-1,start,true);
-					write(w/2-(exit.size()/2),(h/2)+1,exit,false);
-				}
-				else if(idx % 4 == 1)//3 BUTTON
-				{
-					write(w/2-(start.size()/2),(h/2)-1,start,true);
-					write(w/2-(exit.size()/2),(h/2)+1,exit,false);
-				}
-				else if(idx % 4 == 0)//4 BUTTON
-				{
-					write(w/2-(start.size()/2),(h/2)-1,start,true);
-					write(w/2-(exit.size()/2),(h/2)+1,exit,false);
+					write(tasks[i].answers[j],h/2+j+1,false);
 				}
 			}
 		}
 	}
+
+	clear();
+	int percent = (right/(double)tasks.size())*100.0;
+	write("Ваш результат: "+to_string(percent)+"%\n",h/2);
+	int mark = floor(5*(right/(double)tasks.size())+0.5);
+	write("Ваша оценка: "+to_string(mark)+"\n",h/2+2);
 
 	//Ваш результат 4/10 (40%)
 
@@ -259,7 +244,10 @@ int main(int argc,char** argv)
 	//  ВЫЙТИ        ЗАНОВО
 	tcsetattr(STDIN_FILENO,TCSANOW,&old_tio);//Set old settings
 
-	//clear();
-	
+	for(int i=0;i<3;i++) cout << endl;
+	cout << "Press enter for exit..."<<endl;
+	while(getchar()!=10);
+	clear();
+
 	return 0;
 }
