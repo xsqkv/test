@@ -1,12 +1,18 @@
 #include <iostream>
-#include <sys/ioctl.h>
-#include <unistd.h>
 #include <string>
-#include <termios.h>
 #include <signal.h>
 #include <fstream>
 #include <vector>
 #include <cmath>
+
+#ifdef __linux__
+	#include <termios.h>
+	#include <unistd.h>
+	#include <sys/ioctl.h>
+#else
+	#include <windows.h>
+	#include <conio.h>
+#endif
 
 using namespace std;
 
@@ -28,7 +34,9 @@ struct Task
 	int rightAnswer;
 };
 
+#ifdef __linux__
 struct termios old_tio, new_tio;//GLOBAL SETTINGS VARIABLES
+#endif
 int w,h;
 
 void setcur(int x,int y) {printf("\033[%d;%dH",y+1,x+1);}
@@ -44,14 +52,32 @@ void write(string text,int y,bool selected=false)
 	printf("%s","\033[0m");
 }
 
-void clear() {system("clear");}//CLEAR SCREEN
+void clear() //CLEAR SCREEN
+{
+#ifdef __linux__
+	system("clear");
+#else
+	system("cls");
+#endif
+}
 
+class onExit
+{
+	~onExit()
+	{
+		system("cls");
+		exit(1);
+	}
+};
+
+#ifdef __linux__
 void exit(int s)//FUNCTION FOR EXIT EVENT
 {
 	system("clear");
 	tcsetattr(STDIN_FILENO,TCSANOW,&old_tio);//Set old settings
 	exit(1);
 }
+#endif
 
 bool isAnswer(string text)
 {
@@ -60,19 +86,30 @@ bool isAnswer(string text)
 
 int main(int argc,char** argv)
 {
+#ifdef _WIN32
+	setlocale(LC_ALL, "ru-RU.utf8");
+#endif
 	double right = 0;
 
+#ifdef __linux__
 	struct sigaction sigIntHandler;         //
 	sigIntHandler.sa_handler = exit;		//
 	sigemptyset(&sigIntHandler.sa_mask);	//CATCH EXIT EVENT
 	sigIntHandler.sa_flags = 0;				//
 	sigaction(SIGINT, &sigIntHandler, NULL);//
+#endif
 
+#ifdef __linux__
 	struct winsize buff;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &buff);//PUT SIZE INTO VARIABLE
-
 	w = buff.ws_col;//CONSOLE BUFFER WIDTH
 	h = buff.ws_row;//CONSOLE BUFFER HEIGHT
+#else
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+	w = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+	h = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+#endif
 
 	char ch = 0;//CHAR FOR CATCHING ENTER
 	long long idx = pow(2,16)+1;//INDEX OF BUTTON
@@ -88,13 +125,16 @@ int main(int argc,char** argv)
 	write(start,h/2-1,true);//START BUTTON
 	write(exit,h/2+1);//EXIT BUTTON
 
+#ifdef __linux__
 	tcgetattr(STDIN_FILENO,&old_tio);//Get settings in variable
 	new_tio=old_tio;//Copy old settings to new
 	new_tio.c_lflag &=(~ICANON & ~ECHO);//Set new flags
 	tcsetattr(STDIN_FILENO,TCSANOW,&new_tio);//Set new settings
+#endif
 
 	for(;;)//USER SELECT
 	{
+#ifdef __linux__
 		ch = getchar();//CATCH SELECT
 		if(ch == 10)
 		{
@@ -122,7 +162,33 @@ int main(int argc,char** argv)
 					break;
 			}
 		}
-		if(idx % 2 == 1)//START BUTTON
+#else
+		ch = _getch();
+		if(ch == '\r')
+		{
+			if(idx % 2 == 1)//IF SELECTED ENTER
+			{
+				break;
+			}
+			else//IF SELECTED EXIT
+			{
+				clear();
+				//tcsetattr(STDIN_FILENO,TCSANOW,&old_tio);//Set old settings
+				return 0;
+			}
+		}
+		switch (_getch())
+		{
+			case 72://ARROW UP
+				idx--;
+				break;
+			case 80://ARROW DOWN
+				idx++;
+				break;
+		}
+#endif
+		
+		if(idx % 2 == 1)//START BUTTON	
 		{
 			write(start,h/2-1,true);
 			write(exit,h/2+1);
@@ -190,6 +256,7 @@ int main(int argc,char** argv)
 		}
 		for(;;)
 		{
+			#if __linux__
 			ch = getchar();//CATCH SELECT
 			if(ch == 10)//IF ENTER PRESSED
 			{
@@ -216,6 +283,31 @@ int main(int argc,char** argv)
 						break;
 				}
 			}
+			#else
+
+			ch = _getch();//CATCH SELECT
+			if(ch == '\r')//IF ENTER PRESSED
+			{
+				for(int j = 0;j<tasks[i].answers.size();j++)
+				{
+					if(idx % 4 == tasks[i].rightAnswer)
+					{
+						right++;
+						break;
+					}
+				}
+				break;
+			}
+			switch(_getch())
+			{
+				case 72://ARROW UP
+					idx--;
+					break;
+				case 80://ARROW DOWN
+					idx++;
+					break;
+			}
+			#endif
 			for(int j = 0;j<tasks[i].answers.size();j++)
 			{
 				int l = tasks[i].answers.size();
@@ -228,6 +320,7 @@ int main(int argc,char** argv)
 					write(tasks[i].answers[j],h/2+j+1,false);
 				}
 			}
+
 		}
 	}
 
@@ -242,8 +335,9 @@ int main(int argc,char** argv)
 	//    Ваша оценка 2.5
 
 	//  ВЫЙТИ        ЗАНОВО
+#ifdef __linux__
 	tcsetattr(STDIN_FILENO,TCSANOW,&old_tio);//Set old settings
-
+#endif
 	for(int i=0;i<3;i++) cout << endl;
 	cout << "Press enter for exit..."<<endl;
 	while(getchar()!=10);
