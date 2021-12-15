@@ -1,6 +1,12 @@
 #include <iostream>
-#include <unistd.h>
-#include <sys/ioctl.h>
+
+#ifdef __linux__
+	#include <unistd.h>
+	#include <sys/ioctl.h>
+#else
+	#include <windows.h>
+	#include <conio.h>
+#endif
 
 using namespace std;
 
@@ -11,9 +17,9 @@ using namespace std;
     int	h = buff.ws_row;//CONSOLE BUFFER HEIGHT
 #else
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
-	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-	w = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-	h = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+	auto a = GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+	int w = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+	int h = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
 #endif
 
 void cwrite(string text,int y,bool selected=false)

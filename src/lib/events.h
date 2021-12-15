@@ -1,6 +1,8 @@
-#include <termios.h>
-#include <unistd.h>
-#include <sys/ioctl.h>
+#ifdef __linux__
+	#include <termios.h>
+	#include <unistd.h>
+	#include <sys/ioctl.h>
+#endif
 
 #ifdef __linux__
 	struct termios old_tio, new_tio;//GLOBAL SETTINGS VARIABLES
